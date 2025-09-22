@@ -107,6 +107,7 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: Optional[int] = None
     stop: Optional[Union[str, list[str]]] = None
     stream: bool = False
+    task: Optional[str] = None # 新增任务字段
 
 
 class ChatCompletionResponseChoice(BaseModel):

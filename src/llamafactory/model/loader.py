@@ -164,6 +164,13 @@ def load_model(
                 load_class = AutoModelForSeq2SeqLM
             elif type(config) in AutoModelForTextToWaveform._model_mapping.keys():  # audio hack for qwen2_5_omni
                 load_class = AutoModelForTextToWaveform
+            elif (  
+                getattr(config, "model_type", None) == "qwen2" and  
+                hasattr(config, "architectures") and
+                "Qwen2MultiTaskForCausalLM" in config.architectures # 多头输出模型
+            ):
+                from transformers.models.qwen2.modeling_qwen2 import Qwen2MultiTaskForCausalLM
+                load_class = Qwen2MultiTaskForCausalLM
             else:
                 load_class = AutoModelForCausalLM
 
@@ -171,6 +178,37 @@ def load_model(
                 model = load_class.from_config(config, trust_remote_code=model_args.trust_remote_code)
             else:
                 model = load_class.from_pretrained(**init_kwargs)
+
+                if (  
+                    getattr(config, "model_type", None) == "qwen2" and  
+                    hasattr(config, "architectures") and
+                    "Qwen2MultiTaskForCausalLM" in config.architectures # 多头输出模型
+                ):
+                    from safetensors.torch import load_file
+                    import json
+                    # # 自动初始化多任务头
+                    # if hasattr(model, "copy_lm_head_weight_to_tasks"):
+                    #     model.copy_lm_head_weight_to_tasks(state_dict)
+                    index_path = os.path.join(model_args.model_name_or_path, "model.safetensors.index.json")
+
+                    if os.path.exists(index_path):
+                        with open(index_path, "r", encoding="utf-8") as f:
+                            index_data = json.load(f)
+
+                        weight_map = index_data.get("weight_map", {})
+                        lm_file = weight_map.get("lm_head.weight", None)
+
+                        if lm_file:
+                            safetensor_path = os.path.join(model_args.model_name_or_path, lm_file)
+                            state_dict = load_file(safetensor_path, device="cpu")
+
+                            if hasattr(model, "copy_lm_head_weight_to_tasks"):
+                                model.copy_lm_head_weight_to_tasks(state_dict)
+                        else:
+                            print("[Skip] lm_head.weight 不在权重索引文件中，跳过初始化多任务头")
+                    else:
+                        print(f"[Skip] 找不到 {index_path}，跳过初始化多任务头")
+                        
                 if getattr(model.config, "model_type", None) == "qwen2_5_omni":
                     model = model.thinker  # use part of Omni model
 

@@ -241,14 +241,23 @@ class SFTDataCollatorWith4DAttentionMask(MultiModalDataCollatorForSeq2Seq):
     compute_dtype: "torch.dtype" = torch.float32
 
     def __call__(self, features: list[dict[str, Any]]) -> dict[str, "torch.Tensor"]:
+        # 1. 取出每条样本的 task 字段，防止被 tokenizer.pad() 尝试转 tensor
+        task_list = [feature.pop("task", None) for feature in features]
+
+        # 2. 正常调用父类 __call__ 处理其他字段（tokenizer.pad 等）
         features = super().__call__(features)
+
+        # 3. 如果需要 4D attention mask，则进行处理
         if self.block_diag_attn and self.attn_implementation != "flash_attention_2":
             features["attention_mask"] = prepare_4d_attention_mask(features["attention_mask"], self.compute_dtype)
 
+        # 4. 保证浮点类型一致
         for key, value in features.items():  # cast data dtype for paligemma
             if torch.is_tensor(value) and torch.is_floating_point(value):
                 features[key] = value.to(self.compute_dtype)
 
+        # 5. 加回 task 字段（保留为 list[str]，不转 tensor）
+        features["task"] = task_list
         return features
 
 

@@ -193,6 +193,7 @@ async def create_chat_completion_response(
         images,
         videos,
         audios,
+        task=request.task,  # 直接使用请求中的任务字段
         do_sample=request.do_sample,
         temperature=request.temperature,
         top_p=request.top_p,
@@ -256,6 +257,7 @@ async def create_stream_chat_completion_response(
         images,
         videos,
         audios,
+        task=request.task,  # 直接使用请求中的任务字段
         do_sample=request.do_sample,
         temperature=request.temperature,
         top_p=request.top_p,

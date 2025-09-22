@@ -117,6 +117,7 @@ class HuggingfaceEngine(BaseEngine):
         prompt_length = len(prompt_ids)
         inputs = torch.tensor([prompt_ids], device=model.device)
         attention_mask = torch.ones_like(inputs, dtype=torch.long)
+        task: Optional[Union[str, list[str]]] = input_kwargs.pop("task", None)
 
         do_sample: Optional[bool] = input_kwargs.pop("do_sample", None)
         temperature: Optional[float] = input_kwargs.pop("temperature", None)
@@ -174,6 +175,7 @@ class HuggingfaceEngine(BaseEngine):
 
         gen_kwargs = dict(
             inputs=inputs,
+            task=task,
             attention_mask=attention_mask,
             generation_config=GenerationConfig(**generating_args),
         )
@@ -223,6 +225,18 @@ class HuggingfaceEngine(BaseEngine):
         audios: Optional[list["AudioInput"]] = None,
         input_kwargs: Optional[dict[str, Any]] = {},
     ) -> list["Response"]:
+        # 1. 记录输入参数
+        logger.info(f"==== _chat called ====")
+        logger.info(f"input_kwargs keys: {list(input_kwargs.keys())}")
+        logger.info(f"input_kwargs values: {input_kwargs}")
+        logger.info(f"Messages count: {len(messages)}")
+        
+        # 2. 特别检查任务参数
+        task_value = input_kwargs.get("task", "NOT PROVIDED")
+        logger.info(f"Task in _chat: {task_value} (type: {type(task_value).__name__})")
+
+        # 3. 调用 _process_args
+        logger.info("Calling _process_args...")
         gen_kwargs, prompt_length = HuggingfaceEngine._process_args(
             model,
             tokenizer,
@@ -237,6 +251,17 @@ class HuggingfaceEngine(BaseEngine):
             audios,
             input_kwargs,
         )
+
+         # 4. 检查 _process_args 返回的 gen_kwargs
+        logger.info(f"_process_args returned gen_kwargs with keys: {list(gen_kwargs.keys())}")
+        if "task" in gen_kwargs:
+            logger.info(f"Task in gen_kwargs: {gen_kwargs['task']} (type: {type(gen_kwargs['task']).__name__})")
+        else:
+            logger.warning("Task not found in gen_kwargs")
+        
+        # 5. 准备调用 model.generate
+        logger.info(f"Preparing to call model.generate with {len(gen_kwargs)} parameters")
+        
         generate_output = model.generate(**gen_kwargs)
         if isinstance(generate_output, tuple):
             generate_output = generate_output[1][0]  # post-process the minicpm_o output

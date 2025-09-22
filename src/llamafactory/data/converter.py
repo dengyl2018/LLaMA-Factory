@@ -215,6 +215,7 @@ class SharegptDatasetConverter(DatasetConverter):
             prompt = aligned_messages[:-1]
             response = aligned_messages[-1:]
 
+        # 经过数据集转换器，样本会保留 _task 字段，进入 Data Collator 后变成 task，最终传入模型
         output = {
             "_prompt": prompt,
             "_response": response,
@@ -223,6 +224,7 @@ class SharegptDatasetConverter(DatasetConverter):
             "_images": self._find_medias(example[self.dataset_attr.images]) if self.dataset_attr.images else None,
             "_videos": self._find_medias(example[self.dataset_attr.videos]) if self.dataset_attr.videos else None,
             "_audios": self._find_medias(example[self.dataset_attr.audios]) if self.dataset_attr.audios else None,
+            "_task": example.get(self.dataset_attr.task, None) if self.dataset_attr.task else None,
         }
         return output
 

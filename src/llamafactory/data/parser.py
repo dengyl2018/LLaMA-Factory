@@ -43,6 +43,7 @@ class DatasetAttr:
     images: Optional[str] = None
     videos: Optional[str] = None
     audios: Optional[str] = None
+    task: Optional[str] = None      # 新增多任务字段
     # dpo columns
     chosen: Optional[str] = None
     rejected: Optional[str] = None
@@ -79,7 +80,8 @@ class DatasetAttr:
 
         if "columns" in attr:
             column_names = ["prompt", "query", "response", "history", "messages", "system", "tools"]
-            column_names += ["images", "videos", "audios", "chosen", "rejected", "kto_tag"]
+            # 数据集配置中如果有 task 字段，则加入 DatasetAttr
+            column_names += ["images", "videos", "audios", "chosen", "rejected", "kto_tag", "task"]
             for column_name in column_names:
                 self.set_attr(column_name, attr["columns"])
 
