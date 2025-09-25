@@ -1,0 +1,106 @@
+docker部署大模型 & mamba环境
+
+第一步、下载大模型参数
+在modelscope上查对应的大模型，例如qwen2.5-vl-72b-instruct：https://www.modelscope.cn/models/Qwen/Qwen2.5-VL-7B-Instruct/files
+然后进入python虚拟环境（如果没有，参考前面的使用mamba创建python虚拟环境）,使用pip安装modelscope(pip install modelscope)，然后指定一个目录，下载模型参数（注意，模型参数一般极大，不要用系统盘去存）:
+modelscope download --model Qwen/Qwen2.5-VL-72B-Instruct --local_dir '/home/online/models/Qwen2.5-VL-72B-Instruct'
+第二步、创建docker容器
+使用docker命令创建一个docker容器
+docker run --gpus all --ipc=host --network=host --rm --name qwen2.5-vl-72b（这里替换成你自己的容器名） -v /home/online/models/Qwen2.5-VL-72B-Instruct:/work/Qwen2.5-VL-72B-Instruct -d qwenllm/qwenvl:2.5-cu121 tail -f /dev/null
+参数解读：
+参数
+含义
+docker run
+基本命令，用于创建并启动一个新的容器。
+--gpus all
+允许容器访问所有可用的GPU资源，这对于需要使用GPU加速的应用（如深度学习模型推理或训练）非常关键。
+--ipc=host
+将容器的IPC（进程间通信）命名空间与宿主机共享，允许容器与宿主机之间进行高效的进程间通信。
+--network=host
+将容器的网络栈与宿主机共享，容器将使用宿主机的网络接口，避免了网络隔离和端口映射的复杂性。
+使用了该命令，就不需要再做端口映射，但是要避免和其他容器端口冲突
+--rm
+容器停止后自动删除，避免手动清理容器，节省磁盘空间和管理成本。
+你也可以不用这个参数
+--name qwen2.5-vl-72b
+为容器指定一个名称，便于管理和识别，这里命名为“qwen2.5-vl-72b”。你可以改成自己的容器名。
+-v /home/online/models/Qwen2.5-VL-72B-Instruct:/work/Qwen2.5-VL-72B-Instruct
+将宿主机的目录/home/online/models/Qwen2.5-VL-72B-Instruct挂载到容器内的/work/Qwen2.5-VL-72B-Instruct目录，用于共享数据或模型文件。
+注意，这里「:」之前的目录就是你刚才下载的模型参数目录，后面的目录就是挂载到你容器内部的目录。
+-d
+后台运行容器，使容器在后台持续运行，不影响当前终端的使用。
+qwenllm/qwenvl:2.5-cu121
+指定要运行的docker镜像名称和标签，这里是qwenllm/qwenvl镜像的2.5-cu121版本。
+重要！！：这个镜像是我已经预先下载好的，里面预装好了vllm环境，可以用于部署其他大模型，建议直接使用这个镜像
+tail -f /dev/null
+在容器启动后执行的命令，这里使用tail -f /dev/null让容器保持运行状态
+使用这个命令是为了让容器一直有至少一个进程挂在后台，不会直接停止、然后被删除
+创建容器后，可以运行docker ps -a命令，看看容器有没有创建成功。
+第三步、进入到容器中、并启动大模型进程
+首先运行docker ps -a找到刚才创建的容器id
+
+然后添加一个bash进程到容器中，并进入到bash进程
+docker exec -it 01ac462738dc(刚才的容器id) bash
+如图所示，已经进入容器
+
+通过vllm命令，部署大模型
+nohup vllm serve /work/Qwen2.5-VL-72B-Instruct --port 8001 --dtype bfloat16 --limit-mm-per-prompt image=5,video=5 --tensor-parallel-size 8 --gpu_memory_utilization 0.9 --max-model-len 73480 &
+注意，参数中的/work/Qwen2.5-VL-72B-Instruct，就是你刚才挂载到容器内部的模型参数目录。
+查看启动日志tail -f nohup.out，确认模型启动完成，就可以运行exit命令退出容器
+
+由于nohup ... &创建的是后台进程，所以exit退出bash进程，vllm进程仍会保留。
+补充、关闭大模型进程
+和第三步相同的方式进入容器，然后找到vllm进程，kill掉即可
+
+环境使用建议
+尽量使用docker进行开发部署，因为centos7官方软件仓库过于陈旧，如果要在容器外部署项目，大量系统工具需要更新，这些工具更新对系统本身有风险，因此，推荐的做法是，找一个和当前所需的开发/部署环境最接近的镜像，然后创建对应的容器，在这个上面做改造。
+
+
+补充：python的虚拟环境- mamba安装（conda的替代方案）：
+由于公司已经不允许再使用anaconda、minicondaAnaconda 替换/卸载指南
+所以，使用mamba作为conda的替代，安装流程如下
+1. 进入micromamba的release页面，下载最新版micromamba-linux-64
+2. 把下载的micromamba-linux-64直接复制进/usr/bin，并命名为micromamba，并设置为可执行
+
+sudo mv micromamba-linux-64 /usr/bin/micromamba
+sudo chmod +x /usr/bin/micromamba
+3. 使用mamba初始化当前bash
+
+sudo micromamba shell init -s bash
+这会在你的~/.bashrc下面添加如下内容
+export MAMBA_EXE='/usr/bin/micromamba';
+export MAMBA_ROOT_PREFIX='/home/online/.local/share/mamba';
+__mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__mamba_setup"
+else
+    alias micromamba="$MAMBA_EXE"  # Fallback on help from micromamba activate
+fi
+unset __mamba_setup
+4. 简化micromamba命令
+
+在~/.bashrc最后添加一行
+alias mamba=micromamba
+这样，后续就可以直接用mamba命令代替micromamba命令
+这一步做完后要重新登录
+5. 使用mamba创建虚拟环境
+
+mamba create -n py312 python=3.12
+6. 使用mamba激活虚拟环境
+
+mamba acivate py312
+补充：
+为了使所有的账号都可以直接使用mamba，在/etc/profile文件最后增加了如下命令
+# >>> mamba initialize >>>
+# !! Contents within this block are managed by 'micromamba shell init' !!
+export MAMBA_EXE='/usr/bin/micromamba';
+export MAMBA_ROOT_PREFIX='/home/online/.local/share/mamba';
+__mamba_setup="$("$MAMBA_EXE" shell hook --shell bash --root-prefix "$MAMBA_ROOT_PREFIX" 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__mamba_setup"
+else
+    alias micromamba="$MAMBA_EXE"  # Fallback on help from micromamba activate
+fi
+unset __mamba_setup
+alias mamba=micromamba
+# <<< mamba initialize <<<

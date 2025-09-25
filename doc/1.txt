@@ -1,0 +1,84 @@
+# 背景知识
+
+a100: 训练卡， h20: 上线推理卡
+目前资源，一台机器8张A100
+RTX 4090 24GB
+
+
+模型对硬件资源的最低要求：
+https://github.com/hiyouga/LLaMA-Factory?tab=readme-ov-file#hardware-requirement
+
+
+空指针和越界一起微调，会向简单一点的空指针场景倾斜，导致越界学习的不够好
+
+训练方式：
+二阶段：不切分 模型，切分 优化器+梯度
+三阶段：切分 模型+优化器+梯度
+三阶段更节省显存，但训练的时间比二阶段长
+
+LlamaFactory 训练参数详细介绍
+https://www.lei6393.com/archives/llamafactory-train-prameters-desc
+
+更丰富的quickstart
+https://zhuanlan.zhihu.com/p/695287607
+
+大模型下载地址
+https://www.modelscope.cn/models/Qwen/Qwen2.5-VL-7B-Instruct/files
+
+训练用的数据集，支持 alpaca 格式和 sharegpt 格式的数据集
+https://github.com/hiyouga/LLaMA-Factory/blob/main/data/README_zh.md
+
+
+# 机器环境
+
+纯净版 llamafactory 安装
+
+首先激活虚拟环境：mamba activate work
+cd到目录：/home/wbox/Study/LLaMA-Factory
+使用第0张卡体验一下：CUDA_VISIBLE_DEVICES=0 llamafactory-cli train /home/wbox/Study/LLaMA-Factory/examples/study/train.yaml
+使用第1张卡体验一下：CUDA_VISIBLE_DEVICES=1 llamafactory-cli train /home/wbox/Study/LLaMA-Factory/examples/study/train.yaml
+查看GPU使用情况的命令：nvidia-smi 查看一次；watch -n 1 nvidia-smi 每1秒刷新一次
+
+最好存储都放在ssd的目录里，因为/home目录的空间可能会不够
+/home/wbox/Study/LLaMA-Factory/examples/study/nancy_train.yaml
+
+
+
+# 多头训练
+
+微调后的强化学习、多头训练
+
+召回是否合适做强化学习
+需要人工打分,需要有反馈信号
+点误报强制让rd打分?
+
+在机器学习策略上有强化学习应用
+比如用gpt的时候会出现两个答案，让我们选择，这也是强化学习，让人打分
+
+强化学习感觉就是一个数据集场景的不同，召回领域之前那个打分机制控制误报从大模型搜出来，应该原理就是强化学习
+大模型说的一种方法可以实现，其实感觉就是奖励模型。通过打分，让模型更趋向打分更高的输出
+
+强化学习有的时候也可能需要爆改模型，看来学pytorch怎么整模型网络架构很有必要
+
+模型
+PPO（Proximal Policy Optimization，近端策略优化）
+核心思想：通过限制策略更新幅度，避免训练不稳定，确保策略优化过程平稳。
+
+基于人类偏好的对齐方法
+
+DPO（Direct Preference Optimization，直接偏好优化）
+核心思想：直接利用人类偏好数据（如“优质回答”与“劣质回答”的对比）优化模型，绕过传统RLHF（基于人类反馈的强化学习）中的奖励模型训练步骤。
+
+KTO（Kahneman-Tversky Optimization，卡尼曼-特沃斯基优化）
+核心思想：基于行为经济学的前景理论，通过建模人类对“收益/损失”的非对称心理反应（如损失厌恶），优化模型在风险敏感任务中的表现。
+
+GRPO（Group Relative Policy Optimization，组相对策略优化）
+核心思想：通过比较同一组内不同策略或动作的相对表现来优化学习过程，摒弃传统Critic模型，降低计算成本。
+
+
+
+
+# 预训练
+
+预训练（解决跨模块+跨文件问题）
+
